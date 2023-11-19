@@ -1,29 +1,48 @@
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
+#include <linux/input-event-codes.h>
 #include <linux/kd.h>
 #include <map>
 #include <math.h>
 #include <signal.h>
-#include <sys/ioctl.h>
+#include <sys/time.h>
 #include <unistd.h>
 #define STD_DURATION 1000
+#define SPKR_MUTE 0
 #ifndef CLOCK_TICK_RATE
 #define CLOCK_TICK_RATE 1193180
 #endif
 using namespace std;
 
-int dev_console = -1;
+typedef struct eventval {
+  struct timeval t_val;
+  u_int16_t type;
+  u_int16_t code;
+  u_int32_t value;
+
+} event;
+
+int pc_spkr_evnt_file = -1;
+struct timeval tv;
+struct eventval ev = {tv, EV_SND, SND_TONE, 0};
+int sec = gettimeofday(&tv, NULL);
+void *buf = &ev;
 
 map<string, int> durations;
 map<string, float> notes;
 
-void beeper_stop() { ioctl(dev_console, KIOCSOUND, 0); }
+void send_tone(const int tone) {
+  ev.value = tone;
+  write(pc_spkr_evnt_file, buf, sizeof(ev));
+}
+
+void beeper_stop() { send_tone(SPKR_MUTE); }
 
 void handle_signal(int signum) {
-  if (dev_console >= 0 && signum == SIGINT) {
+  if (pc_spkr_evnt_file >= 0 && signum == SIGINT) {
     beeper_stop();
-    close(dev_console);
+    close(pc_spkr_evnt_file);
   }
   exit(signum);
 }
@@ -35,7 +54,8 @@ void error(string what) {
 
 void init() {
   signal(SIGINT, handle_signal);
-  if ((dev_console = open("/dev/console", O_WRONLY)) == -1)
+  if ((pc_spkr_evnt_file = open("/dev/input/by-path/platform-pcspkr-event-spkr",
+                                O_WRONLY)) == -1)
     error("open");
 
   durations["w"] = 1;
@@ -66,7 +86,7 @@ void init() {
 }
 
 void play_beep(int tone, int duration) {
-  ioctl(dev_console, KIOCSOUND, (int)(CLOCK_TICK_RATE / tone));
+  send_tone(tone);
   usleep(1000 * duration);
   beeper_stop();
 }
@@ -83,6 +103,7 @@ void play_f(const string note, const int octave, const string value) {
 
 int main(int argc, char **argv) {
   init();
+
   if (argc < 2)
     error("Usage speaker <file_name>");
   ifstream input(argv[1]);
@@ -98,5 +119,5 @@ int main(int argc, char **argv) {
       play_f(note, octave, value);
     }
   }
-  close(dev_console);
+  close(pc_spkr_evnt_file);
 }
