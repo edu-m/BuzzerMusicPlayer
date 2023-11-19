@@ -10,8 +10,11 @@ This program allows for very crude and simple sequencing/tracking through a file
 More specifically, note values are represented in American Notation, with only the initial of each value used (except for the sixty-fourth note represented as 'sf')
 For example, a file could be similar to this:
 C 4 w
+
 P w
+
 D 4 q
+
 E 4 q
 .
 .
