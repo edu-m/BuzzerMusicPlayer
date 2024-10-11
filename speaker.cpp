@@ -4,120 +4,158 @@
 #include <linux/input-event-codes.h>
 #include <linux/kd.h>
 #include <map>
-#include <math.h>
-#include <signal.h>
+#include <cmath>
+#include <csignal>
 #include <sys/time.h>
 #include <unistd.h>
-#define STD_DURATION 1000
-#define SPKR_MUTE 0
-#ifndef CLOCK_TICK_RATE
-#define CLOCK_TICK_RATE 1193180
-#endif
-using namespace std;
+#include <cstdint>
 
-typedef struct eventval {
-  struct timeval t_val;
-  u_int16_t type;
-  u_int16_t code;
-  u_int32_t value;
+class Speaker {
+public:
+    Speaker();
+    ~Speaker();
 
-} event;
+    void sendTone(int tone);
+    void stop();
 
-int pc_spkr_evnt_file = -1;
-struct timeval tv;
-struct eventval ev = {tv, EV_SND, SND_TONE, 0};
-int sec = gettimeofday(&tv, NULL);
-void *buf = &ev;
+private:
+    int fd_;
+    struct timeval tv_;
+    struct EventVal {
+        struct timeval t_val;
+        uint16_t type;
+        uint16_t code;
+        uint32_t value;
+    } ev_;
+};
 
-map<string, int> durations;
-map<string, float> notes;
+Speaker::Speaker() : fd_(-1) {
+    fd_ = open("/dev/input/by-path/platform-pcspkr-event-spkr", O_WRONLY);
+    if (fd_ == -1) {
+        throw std::runtime_error("Failed to open speaker device");
+    }
 
-void send_tone(const int tone) {
-  ev.value = tone;
-  write(pc_spkr_evnt_file, buf, sizeof(ev));
+    gettimeofday(&tv_, nullptr);
+    ev_.t_val = tv_;
+    ev_.type = EV_SND;
+    ev_.code = SND_TONE;
+    ev_.value = 0;
 }
 
-void beeper_stop() { send_tone(SPKR_MUTE); }
+Speaker::~Speaker() {
+    if (fd_ != -1) {
+        stop();
+        close(fd_);
+        fd_ = -1;
+    }
+}
+
+void Speaker::sendTone(int tone) {
+    ev_.value = tone;
+    ssize_t result = write(fd_, &ev_, sizeof(ev_));
+    if (result == -1) {
+        throw std::runtime_error("Failed to send tone");
+    }
+}
+
+void Speaker::stop() {
+    sendTone(0); // Mute the speaker
+}
+
+class NotePlayer {
+public:
+    NotePlayer();
+    int getDuration(const std::string& valueName) const;
+    void play(const std::string& note, int octave, const std::string& value, Speaker& speaker);
+
+private:
+    static constexpr int STD_DURATION = 1000;
+    std::map<std::string, int> durations_;
+    std::map<std::string, float> notes_;
+};
+
+NotePlayer::NotePlayer() {
+    durations_ = {
+        {"w", 1}, {"h", 2}, {"q", 4}, {"e", 8},
+        {"s", 16}, {"t", 32}, {"sf", 64}
+    };
+
+    notes_ = {
+        {"C", 16.35}, {"C#", 17.32}, {"Db", 17.32},
+        {"D", 18.35}, {"D#", 19.45}, {"Eb", 19.45},
+        {"E", 20.6},  {"F", 21.83},  {"F#", 23.12},
+        {"Gb", 23.12},{"G", 24.5},   {"G#", 25.96},
+        {"Ab", 25.96},{"A", 27.5},   {"A#", 29.14},
+        {"Bb", 29.14},{"B", 30.87}
+    };
+}
+
+int NotePlayer::getDuration(const std::string& valueName) const {
+    auto it = durations_.find(valueName);
+    if (it != durations_.end()) {
+        return STD_DURATION / it->second;
+    } else {
+        throw std::invalid_argument("Invalid duration value: " + valueName);
+    }
+}
+
+void NotePlayer::play(const std::string& note, int octave, const std::string& value, Speaker& speaker) {
+    int duration = getDuration(value);
+    auto it = notes_.find(note);
+    if (it != notes_.end()) {
+        float frequency = it->second * std::pow(2, octave);
+        speaker.sendTone(static_cast<int>(frequency));
+        usleep(1000 * duration);
+        speaker.stop();
+        usleep(1000 * duration);
+    } else {
+        throw std::invalid_argument("Invalid note: " + note);
+    }
+}
+
+Speaker* g_speaker = nullptr;
 
 void handle_signal(int signum) {
-  if (pc_spkr_evnt_file >= 0 && signum == SIGINT) {
-    beeper_stop();
-    close(pc_spkr_evnt_file);
-  }
-  exit(signum);
-}
-
-void error(string what) {
-  cout << what << endl;
-  exit(EXIT_FAILURE);
-}
-
-void init() {
-  signal(SIGINT, handle_signal);
-  if ((pc_spkr_evnt_file = open("/dev/input/by-path/platform-pcspkr-event-spkr",
-                                O_WRONLY)) == -1)
-    error("open");
-
-  durations["w"] = 1;
-  durations["h"] = 2;
-  durations["q"] = 4;
-  durations["e"] = 8;
-  durations["s"] = 16;
-  durations["t"] = 32;
-  durations["sf"] = 64;
-
-  notes["C"] = 16.35;
-  notes["C#"] = 17.32;
-  notes["Db"] = 17.32;
-  notes["D"] = 18.35;
-  notes["D#"] = 19.45;
-  notes["Eb"] = 19.45;
-  notes["E"] = 20.6;
-  notes["F"] = 21.83;
-  notes["F#"] = 23.12;
-  notes["Gb"] = 23.12;
-  notes["G"] = 24.5;
-  notes["G#"] = 25.96;
-  notes["Ab"] = 25.96;
-  notes["A"] = 27.5;
-  notes["A#"] = 29.14;
-  notes["Bb"] = 29.14;
-  notes["B"] = 30.87;
-}
-
-void play_beep(int tone, int duration) {
-  send_tone(tone);
-  usleep(1000 * duration);
-  beeper_stop();
-}
-
-int get_corresponding_duration(string value_name) {
-  return STD_DURATION / durations[value_name];
-}
-
-void play_f(const string note, const int octave, const string value) {
-  int duration = get_corresponding_duration(value);
-  play_beep(notes[note] * pow(2, octave), duration);
-  usleep(1000 * duration);
+    if (g_speaker != nullptr && signum == SIGINT) {
+        g_speaker->stop();
+    }
+    exit(signum);
 }
 
 int main(int argc, char **argv) {
-  init();
+    try {
+        std::signal(SIGINT, handle_signal);
+        Speaker speaker;
+        g_speaker = &speaker;
+        NotePlayer notePlayer;
 
-  if (argc < 2)
-    error("Usage speaker <file_name>");
-  ifstream input(argv[1]);
-  string note, value;
-  int octave;
-  while (!input.eof()) {
-    input >> note;
-    if (note == "P") {
-      input >> value;
-      usleep(1000 * get_corresponding_duration(value));
-    } else {
-      input >> octave >> value;
-      play_f(note, octave, value);
+        if (argc < 2) {
+            std::cerr << "Usage: speaker <file_name>" << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        std::ifstream input(argv[1]);
+        if (!input) {
+            std::cerr << "Failed to open input file: " << argv[1] << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        std::string note, value;
+        int octave;
+        while (input >> note) {
+            if (note == "P") {
+                input >> value;
+                int duration = notePlayer.getDuration(value);
+                usleep(1000 * duration);
+            } else {
+                input >> octave >> value;
+                notePlayer.play(note, octave, value, speaker);
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return EXIT_FAILURE;
     }
-  }
-  close(pc_spkr_evnt_file);
+    return 0;
 }
+
