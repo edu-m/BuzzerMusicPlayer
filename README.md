@@ -25,7 +25,7 @@ and so on
 Note: when specifying a pause with P, do not put any octave number
 
 # Usage
-To compile, simply type 'make' in a terminal. You can also run 'make clean' to remove all executables.
+To compile, simply type `make` in a terminal. You can also run `make clean` to remove all executables.
 
 There will be three executables:
 - speaker: the main program, uses the pc speaker to produce sound
@@ -34,4 +34,4 @@ There will be three executables:
 
 Running the program just requires one parameter, the input file:
 
-./speaker input.txt
+`./speaker input.txt`
