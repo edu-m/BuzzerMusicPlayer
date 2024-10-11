@@ -25,4 +25,13 @@ and so on
 Note: when specifying a pause with P, do not put any octave number
 
 # Usage
-Usage is very simple, just compile and run specifying the file to be read
+To compile, simply type 'make' in a terminal. You can also run 'make clean' to remove all executables.
+
+There will be three executables:
+- speaker: the main program, uses the pc speaker to produce sound
+- speaker_old: should technically work the same as the above mentioned but the code is older and significantly less refined
+- speaker_soundcard: instead of using the pc speaker, uses ALSA to emulate the sound
+
+Running the program just requires one parameter, the input file:
+
+./speaker input.txt
