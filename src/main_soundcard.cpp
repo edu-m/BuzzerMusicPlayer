@@ -1,5 +1,5 @@
-#include "include/SoundPlayer/soundplayer.h"
 #include "include/NotePlayer/noteplayer_alsa.h"
+#include "include/SoundPlayer/soundplayer.h"
 #include <cmath>
 #include <csignal>
 #include <fstream>

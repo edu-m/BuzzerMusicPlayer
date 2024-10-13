@@ -25,4 +25,3 @@ private:
     double frequency;
   } data_;
 };
-

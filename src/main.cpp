@@ -1,5 +1,5 @@
-#include "include/Speaker/speaker.h"
 #include "include/NotePlayer/noteplayer.h"
+#include "include/Speaker/speaker.h"
 #include <cmath>
 #include <csignal>
 #include <fstream>
