@@ -2,9 +2,11 @@
 #include "include/SoundPlayer/soundplayer.h"
 #include <cmath>
 #include <csignal>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <portaudio.h>
+#include <unistd.h>
 
 void handle_signal(int signum) {
   Pa_Terminate();
@@ -37,7 +39,7 @@ int main(int argc, char **argv) {
       } else if (note == "P") {
         input >> value;
         int duration = notePlayer.getDuration(value, bpm);
-        Pa_Sleep(duration);
+        usleep(duration * 1000);
       } else {
         input >> octave >> value;
         notePlayer.play(note, octave, value, player, bpm);
@@ -47,5 +49,5 @@ int main(int argc, char **argv) {
     std::cerr << e.what() << std::endl;
     return EXIT_FAILURE;
   }
-  return 0;
+  return EXIT_SUCCESS;
 }

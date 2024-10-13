@@ -2,6 +2,7 @@
 #include "include/Speaker/speaker.h"
 #include <cmath>
 #include <csignal>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 
@@ -51,5 +52,5 @@ int main(int argc, char **argv) {
     std::cerr << e.what() << std::endl;
     return EXIT_FAILURE;
   }
-  return 0;
+  return EXIT_SUCCESS;
 }

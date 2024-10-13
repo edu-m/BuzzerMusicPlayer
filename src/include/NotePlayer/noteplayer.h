@@ -11,7 +11,7 @@ public:
             Speaker &speaker, const int bpm);
 
 protected:
-  const int TIME_MS_QUAD = 240000;
+  static constexpr int TIME_MS_QUAD = 240000;
   std::map<std::string, int> durations_;
   std::map<std::string, float> notes_;
 };
