@@ -31,7 +31,7 @@ void SoundPlayer::playTone(double frequency, int duration_ms) {
       Pa_GetDeviceInfo(outputParameters.device)->defaultLowOutputLatency;
   outputParameters.hostApiSpecificStreamInfo = nullptr;
 
-  PaError err = Pa_OpenStream(&stream_, nullptr, &outputParameters, 44100,
+  PaError err = Pa_OpenStream(&stream_, nullptr, &outputParameters, SAMPLE_RATE,
                               paFramesPerBufferUnspecified, paClipOff,
                               paCallback, &data_);
   if (err != paNoError) {
@@ -67,8 +67,9 @@ int SoundPlayer::paCallback(const void * /*inputBuffer*/, void *outputBuffer,
   PaData *data = static_cast<PaData *>(userData);
 
   for (unsigned int i = 0; i < framesPerBuffer; ++i) {
-    *out++ = static_cast<float>(std::sin(2 * M_PI * data->phase));
-    data->phase += data->frequency / 44100.0;
+    *out++ = std::sinf(2 * M_PI * data->phase); // sine 
+    // *out++ = 2 * (data->phase - (int)(data->phase + 0.5)); // sawtooth
+    data->phase += data->frequency / SAMPLE_RATE;
     if (data->phase >= 1.0)
       data->phase -= 1.0;
   }

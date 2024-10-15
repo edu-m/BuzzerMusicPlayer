@@ -3,6 +3,7 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+#define SAMPLE_RATE 48000.0 // anything higher should not be necessary
 #include <portaudio.h>
 
 class SoundPlayer {

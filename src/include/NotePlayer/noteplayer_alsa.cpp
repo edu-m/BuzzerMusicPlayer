@@ -4,16 +4,6 @@
 #include <stdexcept>
 #include <unistd.h>
 
-int NotePlayerAlsa::getDuration(const std::string &valueName,
-                                const int bpm) const {
-  auto it = durations_.find(valueName);
-  if (it != durations_.end()) {
-    return TIME_MS_QUAD / (bpm * it->second);
-  } else {
-    throw std::invalid_argument("Invalid duration value: " + valueName);
-  }
-}
-
 void NotePlayerAlsa::play(const std::string &note, int octave,
                           const std::string &value, SoundPlayer &player,
                           const int bpm) {

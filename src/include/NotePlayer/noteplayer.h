@@ -11,6 +11,9 @@ public:
             Speaker &speaker, const int bpm);
 
 protected:
+  // bpm to ms duration is generally calculated based on the quarter note duration
+  // in order to generalize we calculate the quadruple of that and then adapt it to
+  // the duration in accordance to their fractionary value
   static constexpr int TIME_MS_QUAD = 240000;
   std::map<std::string, int> durations_;
   std::map<std::string, float> notes_;
