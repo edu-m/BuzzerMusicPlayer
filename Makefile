@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -Wall -std=c++11 -O3 -Wextra
+CXXFLAGS = -Wall -std=c++11 -O3 -Wextra -lncurses
 
 # Include directories
 INCLUDE_DIRS = src/include src/include/NotePlayer src/include/SoundPlayer src/include/Speaker

@@ -1,0 +1,8 @@
+bpm 160
+C 4 w
+C 4 h
+C 4 q
+C 4 e
+C 4 s
+C 4 t
+C 4 sf

@@ -1,6 +1,5 @@
 #include "noteplayer.h"
 #include <cmath>
-#include <iostream>
 #include <stdexcept>
 #include <unistd.h>
 
@@ -15,27 +14,30 @@ NotePlayer::NotePlayer() {
             {"B", 30.87}};
 }
 
-int NotePlayer::getDuration(const std::string &valueName, const int bpm) const {
+int NotePlayer::getFractionary(const std::string &valueName) const {
   auto it = durations_.find(valueName);
-  if (it != durations_.end()) {
-    return TIME_MS_QUAD / (bpm * it->second);
-  } else {
+  if (it == durations_.end())
     throw std::invalid_argument("Invalid duration value: " + valueName);
-  }
+  return it->second;
+}
+
+int NotePlayer::getDuration(const std::string &valueName, const int bpm) const {
+  int duration = getFractionary(valueName);
+  return TIME_MS_QUAD / (bpm * duration);
 }
 
 void NotePlayer::play(const std::string &note, int octave,
                       const std::string &value, Speaker &speaker,
                       const int bpm) {
   int duration = getDuration(value, bpm);
-  std::cout << note << octave << " (" << duration << " ms)" << std::endl;
+  // std::cout << note << octave << " (" << duration << " ms)" << std::endl;
   auto it = notes_.find(note);
   if (it != notes_.end()) {
     float frequency = it->second * std::pow(2, octave);
     speaker.sendTone(static_cast<int>(frequency));
     usleep(1000 * duration);
     speaker.stop();
-    usleep(1000 * duration);
+    // usleep(1000 * duration);
   } else {
     throw std::invalid_argument("Invalid note: " + note);
   }

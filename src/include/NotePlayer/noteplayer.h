@@ -6,6 +6,7 @@
 class NotePlayer {
 public:
   NotePlayer();
+  int getFractionary(const std::string &valueName) const;
   int getDuration(const std::string &valueName, const int bpm) const;
   void play(const std::string &note, int octave, const std::string &value,
             Speaker &speaker, const int bpm);
