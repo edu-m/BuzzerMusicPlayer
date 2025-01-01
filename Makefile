@@ -1,67 +1,93 @@
-# Compiler and flags
-CXX = g++
-CXXFLAGS = -Wall -std=c++11 -O3 -Wextra -lncurses
+# ─────────────────────────────────────────────────────────────────────────────
+# Compiler and Flags
+# ─────────────────────────────────────────────────────────────────────────────
+CXX       = g++
+CXXFLAGS  = -Wall -std=c++20 -O3 -Wextra
+DEPFLAGS  = -MMD -MP  # Generate dependency info
 
-# Include directories
-INCLUDE_DIRS = src/include src/include/NotePlayer src/include/SoundPlayer src/include/Speaker
-INCLUDES = $(foreach dir, $(INCLUDE_DIRS), -I$(dir))
-CXXFLAGS += $(INCLUDES)
+# Libraries to link
+LDLIBS    = -lportaudio -lm -lncurses
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Include Directories
+# ─────────────────────────────────────────────────────────────────────────────
+# Adjust or add/remove directories as needed:
+INCLUDE_DIRS = src/include \
+               src/include/NotePlayer \
+               src/include/SoundPlayer \
+               src/include/Speaker \
+               src/include/NcursesDrawer
+
+CXXFLAGS += $(foreach dir, $(INCLUDE_DIRS), -I$(dir))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths and Directories
+# ─────────────────────────────────────────────────────────────────────────────
+VPATH     = src:src/include/NotePlayer:src/include/SoundPlayer:src/include/Speaker:src/include/NcursesDrawer
+OBJDIR    = src/obj
 BUILD_DIR = build
 
-# Libraries
-LIBS = -lportaudio -lm
-
-# VPATH for source files
-VPATH = src:src/include/NotePlayer:src/include/SoundPlayer:src/include/Speaker
-
-# Source files for 'speaker' executable
+# ─────────────────────────────────────────────────────────────────────────────
+# Source Files
+# ─────────────────────────────────────────────────────────────────────────────
+# 1) For the 'speaker' executable (no ncurses drawing):
 SPEAKER_SOURCES = main.cpp \
                   speaker.cpp \
-				  noteplayer.cpp 
-# Source files for 'speaker_soundcard' executable
+                  noteplayer.cpp \
+                  NcursesDrawer.cpp
+
+# 2) For the 'speaker_soundcard' executable (with ncurses drawing):
 SPEAKER_SOUNDCARD_SOURCES = main_soundcard.cpp \
                             noteplayer.cpp \
+                            NcursesDrawer.cpp \
                             soundplayer.cpp \
-							noteplayer_alsa.cpp \
-							speaker.cpp
+                            noteplayer_alsa.cpp \
+                            speaker.cpp
 
-# Object directory
-OBJDIR = src/obj
-
-# Object files for 'speaker'
-SPEAKER_OBJECTS = $(addprefix $(OBJDIR)/, $(SPEAKER_SOURCES:.cpp=.o))
-
-# Object files for 'speaker_soundcard'
+# Derive object lists from source lists
+SPEAKER_OBJECTS         = $(addprefix $(OBJDIR)/, $(SPEAKER_SOURCES:.cpp=.o))
 SPEAKER_SOUNDCARD_OBJECTS = $(addprefix $(OBJDIR)/, $(SPEAKER_SOUNDCARD_SOURCES:.cpp=.o))
 
-# Dependency files
-DEPFLAGS = -MMD -MP
+# Collect all .d files to include automatically
 DEPS = $(wildcard $(OBJDIR)/*.d)
 
-# Target executables
-TARGETS = $(BUILD_DIR)/speaker $(BUILD_DIR)/speaker_soundcard
+# Final targets
+TARGETS = $(BUILD_DIR)/speaker \
+          $(BUILD_DIR)/speaker_soundcard
 
-# Default target
+# ─────────────────────────────────────────────────────────────────────────────
+# Default Rule
+# ─────────────────────────────────────────────────────────────────────────────
+.PHONY: all clean
 all: $(TARGETS)
 
-# Build 'speaker' executable
+# ─────────────────────────────────────────────────────────────────────────────
+# Link Rules
+# ─────────────────────────────────────────────────────────────────────────────
 $(BUILD_DIR)/speaker: $(SPEAKER_OBJECTS)
-	$(CXX) $(CXXFLAGS) -o $@ $(SPEAKER_OBJECTS)
-
-# Build 'speaker_soundcard' executable
-$(BUILD_DIR)/speaker_soundcard: $(SPEAKER_SOUNDCARD_OBJECTS)
-	$(CXX) $(CXXFLAGS) -o $@ $(SPEAKER_SOUNDCARD_OBJECTS) $(LIBS)
-
-# Pattern rule to compile .cpp files to .o files in obj directory
- $(OBJDIR)/%.o: %.cpp
-	@mkdir -p $(OBJDIR)
 	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
+
+$(BUILD_DIR)/speaker_soundcard: $(SPEAKER_SOUNDCARD_OBJECTS)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Compile Rules
+# ─────────────────────────────────────────────────────────────────────────────
+# Pattern rule to compile .cpp into .o
+$(OBJDIR)/%.o: %.cpp
+	@mkdir -p $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< -o $@
 
-# Include dependency files
+# ─────────────────────────────────────────────────────────────────────────────
+# Include generated dependency files
+# ─────────────────────────────────────────────────────────────────────────────
 -include $(DEPS)
 
-# Clean up
+# ─────────────────────────────────────────────────────────────────────────────
+# Clean Rule
+# ─────────────────────────────────────────────────────────────────────────────
 clean:
-	rm -f $(BUILD_DIR)/speaker $(BUILD_DIR)/speaker_soundcard
+	rm -f $(TARGETS)
 	rm -rf $(OBJDIR)

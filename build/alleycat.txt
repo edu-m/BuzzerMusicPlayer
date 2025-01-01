@@ -1,4 +1,4 @@
-bpm 270
+bpm 250
 C 4 s
 P q
 C 4 s
