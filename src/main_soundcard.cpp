@@ -1,133 +1,150 @@
 #include "include/NcursesDrawer/NcursesDrawer.h"
 #include "include/NotePlayer/noteplayer_alsa.h"
 #include "include/SoundPlayer/soundplayer.h"
+
+#include <chrono> // for std::chrono::milliseconds
 #include <cmath>
 #include <csignal>
 #include <cstdlib>
+#include <curses.h> // for LINES, getch()
+#include <exception>
 #include <fstream>
 #include <iostream>
-#include <map>
+#include <memory>
 #include <portaudio.h>
 #include <string>
-#include <unistd.h>
+#include <thread> // for std::this_thread::sleep_for
+int getNoteOffset(const std::string &note);
+class NcursesSession {
+public:
+  NcursesSession() {
+    initscr();
+    cbreak();
+    noecho();
+    keypad(stdscr, true);
+    curs_set(0); // Hide the cursor if desired
+  }
+  NcursesSession(const NcursesSession &) = delete;
+  NcursesSession &operator=(const NcursesSession &) = delete;
+  NcursesSession(NcursesSession &&) = delete;
+  NcursesSession &operator=(NcursesSession &&) = delete;
 
-// -------------------------------------------------------------------
-// Constants/Defines moved here or remain here
-// -------------------------------------------------------------------
+  ~NcursesSession() { endwin(); }
+};
+class PortAudioSession {
+public:
+  PortAudioSession() {
+    PaError err = Pa_Initialize();
+    if (err != paNoError) {
+      throw std::runtime_error(std::string("PortAudio init failed: ") +
+                               Pa_GetErrorText(err));
+    }
+  }
+  PortAudioSession(const PortAudioSession &) = delete;
+  PortAudioSession &operator=(const PortAudioSession &) = delete;
+  PortAudioSession(PortAudioSession &&) = delete;
+  PortAudioSession &operator=(PortAudioSession &&) = delete;
 
-void handle_signal(int signum) {
-  Pa_Terminate();
-  endwin(); // Clean up ncurses before exiting
-  exit(signum);
+  ~PortAudioSession() {
+    PaError err = Pa_Terminate();
+    if (err != paNoError) {
+      std::cerr << "Warning: PortAudio terminate failed: "
+                << Pa_GetErrorText(err) << std::endl;
+    }
+  }
+};
+namespace {
+std::weak_ptr<PortAudioSession> g_portaudioWeak;
 }
-
-// Function to map note names to semitone offsets from C
-int getNoteOffset(const std::string &note) {
-  static std::map<std::string, int> noteOffsets = {
-      {"C", 0},  {"C#", 1}, {"Db", 1},  {"D", 2},   {"D#", 3}, {"Eb", 3},
-      {"E", 4},  {"F", 5},  {"F#", 6},  {"Gb", 6},  {"G", 7},  {"G#", 8},
-      {"Ab", 8}, {"A", 9},  {"A#", 10}, {"Bb", 10}, {"B", 11}};
-  auto it = noteOffsets.find(note);
-  if (it != noteOffsets.end()) {
-    return it->second;
-  } else {
-    throw std::invalid_argument("Invalid note name: " + note);
+extern "C" void handle_signal(int signum) {
+  if (signum == SIGINT) {
+    if (auto paSession = g_portaudioWeak.lock()) {
+    }
+    endwin(); // ensure curses is cleaned up
+    std::exit(signum);
   }
 }
-
-int main(int argc, char **argv) {
-  int counter = 0; // Just to keep track of number of notes played
-
-  try {
-    std::signal(SIGINT, handle_signal);
-    SoundPlayer player;
-    NotePlayerAlsa notePlayer;
-
-    if (argc < 2) {
-      std::cerr << "Usage: speaker <file_name>" << std::endl;
-      return EXIT_FAILURE;
-    }
-
-    std::ifstream input(argv[1]);
-    if (!input) {
-      std::cerr << "Failed to open input file: " << argv[1] << std::endl;
-      return EXIT_FAILURE;
-    }
-
-    // Create and initialize our Ncurses drawer
-    NcursesDrawer drawer;
-    drawer.init();
-
-    // Set the initial "middle" note for staff drawing
-    int middleMIDINote = 60; // Middle C
-    drawer.drawStaff(middleMIDINote);
-
-    std::string note, value;
-    int bpm = 100;
-    int octave;
-
-    while (input >> note) {
-      if (note == "bpm") {
-        input >> bpm;
-      } else if (note == "P") {
-        // Pause logic
-        input >> value;
-        int duration = notePlayer.getDuration(value, bpm);
-
-        // Could display a "pause" message if desired, or just remain idle
-        // drawer.displayPause(value); // (if you add such a method)
-
-        usleep(duration * 1000);
-
-      } else {
-        // We have a real note: note, octave, value
-        input >> octave >> value;
-
-        // Play the note
-        notePlayer.play(note, octave, value, player, bpm);
-
-        // Calculate MIDI note number
-        int noteOffset = getNoteOffset(note);
-        int midiNoteNumber = (octave + 1) * 12 + noteOffset;
-
-        // If the note is out of visible range, shift the staff
-        // (You could implement additional logic to auto-scroll)
-        int middleY = LINES / 2;
-        int verticalPosition = middleY - (midiNoteNumber - middleMIDINote);
-        if (verticalPosition < 2 || verticalPosition > LINES - 2) {
-          middleMIDINote = midiNoteNumber;
-          drawer.drawStaff(middleMIDINote);
-        }
-
-        // We'll call the same fractionary logic from notePlayer
-        int fractionary = notePlayer.getFractionary(value);
-        // e.g. fractionary = 4 -> quarter note, fractionary = 8 -> 8th note,
-        // etc. Typically, the number of slash beams is log2(fractionary) - 2 if
-        // fractionary >= 8
-        int fractionaryStemCount =
-            std::max(0, static_cast<int>(std::log2(fractionary) - 2));
-
-        // Ask our drawer to draw the note
-        drawer.drawNote(note, octave, value, fractionary, fractionaryStemCount,
-                        middleMIDINote, midiNoteNumber, ++counter);
-
-        // Check user input to exit
-        int ch = getch();
-        if (ch == 'q' || ch == 'Q')
-          break;
-      }
-    }
-
-    // Show "Idle" message at the end, and wait for user input
-    drawer.displayIdle();
-    drawer.waitForExit();
-
-    // Clean up
-    drawer.end(); // or rely on destructor
-  } catch (const std::exception &e) {
-    std::cerr << e.what() << std::endl;
-    endwin(); // In case something failed, we close ncurses
+void printUsage(const char *programName) {
+  std::cerr << "Usage: " << programName << " <file_name>\n";
+}
+int main(int argc, char **argv) try {
+  if (argc < 2) {
+    printUsage(argv[0]);
     return EXIT_FAILURE;
   }
+  const std::string fileName = argv[1];
+  std::signal(SIGINT, handle_signal);
+  auto portaudioSession = std::make_shared<PortAudioSession>();
+  g_portaudioWeak = portaudioSession;
+  NcursesSession ncursesSession;
+  SoundPlayer player;
+  NotePlayerAlsa notePlayer;
+  NcursesDrawer drawer;
+  drawer.init();
+  std::ifstream input(fileName);
+  if (!input.is_open()) {
+    std::cerr << "Failed to open file: " << fileName << "\n";
+    return EXIT_FAILURE;
+  }
+  int middleMIDINote = 60;
+  drawer.drawStaff(middleMIDINote);
+  int bpm = 100;
+  int octave = 0;
+  int noteCounter = 0;
+  std::string note;
+  std::string value;
+  while (true) {
+    if (!(input >> note)) {
+      break;
+    }
+
+    if (note == "bpm") {
+      if (!(input >> bpm)) {
+        std::cerr << "Error: 'bpm' command requires a numeric value.\n";
+        break;
+      }
+    } else if (note == "P") {
+      if (!(input >> value)) {
+        std::cerr << "Error: 'P' command requires a duration.\n";
+        break;
+      }
+      int durationMs = notePlayer.getDuration(value, bpm);
+      std::this_thread::sleep_for(std::chrono::milliseconds(durationMs));
+    } else {
+      if (!(input >> octave >> value)) {
+        std::cerr << "Malformed note line. Expected: <note> <octave> <value>\n";
+        break;
+      }
+      notePlayer.play(note, octave, value, player, bpm);
+      int noteOffset = getNoteOffset(note);
+      int midiNoteNumber = (octave + 1) * 12 + noteOffset;
+      int middleY = LINES / 2;
+      int verticalPosition = middleY - (midiNoteNumber - middleMIDINote);
+      if (verticalPosition < 2 || verticalPosition > (LINES - 2)) {
+        middleMIDINote = midiNoteNumber;
+        drawer.drawStaff(middleMIDINote);
+      }
+      int fractionary = notePlayer.getFractionary(value);
+      int fractionaryStemCount =
+          std::max(0, static_cast<int>(std::log2(fractionary) - 2));
+      drawer.drawNote(note, octave, value, fractionary, fractionaryStemCount,
+                      middleMIDINote, midiNoteNumber, ++noteCounter);
+    }
+    int ch = getch();
+    if (ch == 'q' || ch == 'Q')
+      break;
+  }
+  drawer.displayIdle();
+  drawer.waitForExit();
+  drawer.end();
+
   return EXIT_SUCCESS;
+} catch (const std::exception &e) {
+  std::cerr << "Error: " << e.what() << std::endl;
+  endwin();
+  return EXIT_FAILURE;
+} catch (...) {
+  std::cerr << "Unknown error occurred.\n";
+  endwin();
+  return EXIT_FAILURE;
 }

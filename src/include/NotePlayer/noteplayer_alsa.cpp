@@ -7,13 +7,7 @@ void NotePlayerAlsa::play(const std::string &note, int octave,
                           const std::string &value, SoundPlayer &player,
                           const int bpm) {
   int duration = getDuration(value, bpm);
-  // std::cout << note << octave << " (" << duration << " ms)" << std::endl;
-  auto it = notes_.find(note);
-  if (it != notes_.end()) {
-    double frequency = it->second * std::pow(2, octave);
-    player.playTone(frequency, duration);
-    
-  } else {
+  if (!notes_.contains(note))
     throw std::invalid_argument("Invalid note: " + note);
-  }
+  player.playTone(notes_.at(note) * std::pow(2, octave), duration);
 }

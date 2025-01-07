@@ -1,131 +1,137 @@
+#include "include/NcursesDrawer/NcursesDrawer.h"
 #include "include/NotePlayer/noteplayer.h"
 #include "include/Speaker/speaker.h"
 
-// Include the NcursesDrawer
-#include "include/NcursesDrawer/NcursesDrawer.h"
-
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <csignal>
 #include <cstdlib>
+#include <curses.h>
+#include <exception>
 #include <fstream>
 #include <iostream>
-#include <map>
+#include <memory>
 #include <string>
-#include <unistd.h>
+#include <thread>
 
-Speaker *g_speaker = nullptr;
+int getNoteOffset(const std::string &note);
 
-int getNoteOffset(const std::string &note) {
-  static std::map<std::string, int> noteOffsets = {
-      {"C", 0}, {"C#", 1}, {"Db", 1}, {"D", 2}, {"D#", 3}, {"Eb", 3},
-      {"E", 4}, {"F", 5},  {"F#", 6}, {"Gb", 6}, {"G", 7}, {"G#", 8},
-      {"Ab", 8}, {"A", 9}, {"A#", 10}, {"Bb", 10}, {"B", 11}
-  };
-  auto it = noteOffsets.find(note);
-  if (it != noteOffsets.end()) {
-    return it->second;
-  } else {
-    throw std::invalid_argument("Invalid note name: " + note);
+class NcursesSession {
+public:
+  NcursesSession() {
+    initscr();
+    cbreak(); // disable line buffering
+    noecho(); // don’t echo input
+    keypad(stdscr, true);
+    curs_set(0); // hide cursor if desired
+  }
+  NcursesSession(const NcursesSession &) = delete;
+  NcursesSession &operator=(const NcursesSession &) = delete;
+  NcursesSession(NcursesSession &&) = delete;
+  NcursesSession &operator=(NcursesSession &&) = delete;
+
+  ~NcursesSession() { endwin(); }
+};
+
+namespace {
+std::weak_ptr<Speaker> g_speakerWeak;
+extern "C" void handleSignal(int signum) {
+  if (signum == SIGINT) {
+    if (auto spk = g_speakerWeak.lock()) {
+      spk->stop();
+    }
+    endwin();
+    std::exit(signum);
   }
 }
-
-// Handle CTRL-C (SIGINT)
-void handle_signal(int signum) {
-  if (g_speaker != nullptr && signum == SIGINT) {
-    g_speaker->stop();
-  }
-  endwin();
-  exit(signum);
 }
-
-int main(int argc, char **argv) {
-  try {
-    std::signal(SIGINT, handle_signal);
-    Speaker speaker;
-    g_speaker = &speaker;
-    NotePlayer notePlayer;
-
-    if (argc < 2) {
-      std::cerr << "Usage: speaker <file_name>" << std::endl;
-      return EXIT_FAILURE;
+void printUsage(const char *progName) {
+  std::cerr << "Usage: " << progName << " <file_name>\n";
+}
+int main(int argc, char **argv) try {
+  if (argc < 2) {
+    printUsage(argv[0]);
+    return EXIT_FAILURE;
+  }
+  const std::string inputFileName = argv[1];
+  std::signal(SIGINT, handleSignal);
+  auto speaker = std::make_shared<Speaker>();
+  g_speakerWeak = speaker;
+  NotePlayer notePlayer; // Adjust constructor logic if needed
+  std::ifstream input{inputFileName};
+  if (!input.is_open()) {
+    std::cerr << "Failed to open input file: " << inputFileName << "\n";
+    return EXIT_FAILURE;
+  }
+  NcursesSession ncursesSession;
+  NcursesDrawer drawer;
+  drawer.init();
+  int middleMIDINote = 60; // Middle C
+  drawer.drawStaff(middleMIDINote);
+  std::string note;
+  std::string value;
+  int octave = 0;
+  int bpm = 100;
+  int noteCounter = 0;
+  while (true) {
+    if (!(input >> note)) {
+      break;
     }
 
-    std::ifstream input(argv[1]);
-    if (!input) {
-      std::cerr << "Failed to open input file: " << argv[1] << std::endl;
-      return EXIT_FAILURE;
-    }
-
-    NcursesDrawer drawer;
-    drawer.init();
-    int middleMIDINote = 60; // e.g., Middle C
-    drawer.drawStaff(middleMIDINote);
-
-    std::string note, value;
-    int octave;
-    int bpm = 100;
-    int noteCounter = 0;
-
-    while (input >> note) {
-      if (note == "bpm") {
-        input >> bpm;
-      } else if (note == "P") {
-        // Pause
-        input >> value;
-        int duration = notePlayer.getDuration(value, bpm);
-        usleep(duration * 1000);
-      } else {
-        input >> octave >> value;
-        notePlayer.play(note, octave, value, speaker, bpm);
-
-        int noteOffset = getNoteOffset(note);
-        int midiNoteNumber = (octave + 1) * 12 + noteOffset;
-
-        // If the note is out of view, shift the staff
+    if (note == "bpm") {
+      if (!(input >> bpm)) {
+        std::cerr << "Error: expected BPM value after 'bpm' command.\n";
+        break;
+      }
+    } else if (note == "P") {
+      if (!(input >> value)) {
+        std::cerr << "Error: expected duration value after 'P' command.\n";
+        break;
+      }
+      int durationMs = notePlayer.getDuration(value, bpm);
+      std::this_thread::sleep_for(std::chrono::milliseconds(durationMs));
+    } else {
+      if (!(input >> octave >> value)) {
+        std::cerr
+            << "Malformed note entry: expected <note> <octave> <value>.\n";
+        break;
+      }
+      notePlayer.play(note, octave, value, *speaker, bpm);
+      int noteOffset = getNoteOffset(note);
+      int midiNoteNumber = (octave + 1) * 12 + noteOffset;
+      {
         int middleY = LINES / 2;
         int verticalPosition = middleY - (midiNoteNumber - middleMIDINote);
-
         if (verticalPosition < 2 || verticalPosition > (LINES - 2)) {
-          // shift the staff center
           middleMIDINote = midiNoteNumber;
           drawer.drawStaff(middleMIDINote);
         }
-
-        // Use NotePlayer to get fractionary (e.g., 4 = quarter note, 8 = 8th, etc.)
-        int fractionary = notePlayer.getFractionary(value);
-        // Calculate # of slash beams for 8th, 16th, etc.
-        // example: fractionaryStemCount = log2(fractionary) - 2 if fractionary >= 8
-        int fractionaryStemCount = 0;
-        if (fractionary >= 8) {
-          fractionaryStemCount = static_cast<int>(std::log2(fractionary) - 2);
-        }
-
-        // Draw the note via NcursesDrawer
-        ++noteCounter;
-        drawer.drawNote(note, octave, value,
-                        fractionary, fractionaryStemCount,
-                        middleMIDINote, midiNoteNumber,
-                        noteCounter);
-
-        // Check if user pressed 'q' to quit
-        int ch = getch();
-        if (ch == 'q' || ch == 'Q') {
-          break;
-        }
       }
+      int fractionary = notePlayer.getFractionary(value);
+      int fractionaryStemCount =
+          std::max(0, static_cast<int>(std::log2(fractionary) - 2));
+
+      ++noteCounter;
+      drawer.drawNote(note, octave, value, fractionary, fractionaryStemCount,
+                      middleMIDINote, midiNoteNumber, noteCounter);
     }
-
-    // Display "Idle" and wait for user input
-    drawer.displayIdle();
-    drawer.waitForExit();
-
-    // End ncurses
-    drawer.end();
-  } 
-  catch (const std::exception &e) {
-    std::cerr << "Exception: " << e.what() << std::endl;
-    endwin(); // Just in case
-    return EXIT_FAILURE;
+    int ch = getch();
+    if (ch == 'q' || ch == 'Q') {
+      break;
+    }
   }
+  drawer.displayIdle();
+  drawer.waitForExit();
+  drawer.end();
+
   return EXIT_SUCCESS;
+} catch (const std::exception &e) {
+  std::cerr << "Exception: " << e.what() << '\n';
+  endwin(); // Fallback in case the RAII type didn’t handle something
+  return EXIT_FAILURE;
+} catch (...) {
+  std::cerr << "Unknown error occurred.\n";
+  endwin();
+  return EXIT_FAILURE;
 }
