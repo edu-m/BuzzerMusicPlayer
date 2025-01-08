@@ -45,15 +45,17 @@ extern "C" void handleSignal(int signum) {
     std::exit(signum);
   }
 }
-}
+} // namespace
 void printUsage(const char *progName) {
-  std::cerr << "Usage: " << progName << " <file_name>\n";
+  std::cerr << "Usage: " << progName
+            << " <file_name> [s(Q)uare / sa(W)tooth / (S)ine / (T)riangle]\n";
 }
 int main(int argc, char **argv) try {
   if (argc < 2) {
     printUsage(argv[0]);
     return EXIT_FAILURE;
   }
+
   const std::string inputFileName = argv[1];
   std::signal(SIGINT, handleSignal);
   auto speaker = std::make_shared<Speaker>();

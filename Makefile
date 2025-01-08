@@ -41,7 +41,7 @@ SPEAKER_SOUNDCARD_SOURCES = main_soundcard.cpp \
                             noteplayer.cpp \
                             NcursesDrawer.cpp \
                             soundplayer.cpp \
-                            noteplayer_alsa.cpp \
+                            noteplayer_soundcard.cpp \
                             speaker.cpp
 
 # Derive object lists from source lists

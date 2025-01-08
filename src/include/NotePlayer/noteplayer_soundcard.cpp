@@ -1,4 +1,4 @@
-#include "noteplayer_alsa.h"
+#include "noteplayer_soundcard.h"
 #include <cmath>
 #include <stdexcept>
 #include <unistd.h>

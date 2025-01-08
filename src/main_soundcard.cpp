@@ -1,5 +1,5 @@
 #include "include/NcursesDrawer/NcursesDrawer.h"
-#include "include/NotePlayer/noteplayer_alsa.h"
+#include "include/NotePlayer/noteplayer_soundcard.h"
 #include "include/SoundPlayer/soundplayer.h"
 
 #include <chrono> // for std::chrono::milliseconds
@@ -72,12 +72,20 @@ int main(int argc, char **argv) try {
     printUsage(argv[0]);
     return EXIT_FAILURE;
   }
+  char selection = 'Q'; // default is square wave
+  if (argc >= 3) {
+    if (*argv[2] != 'Q' && *argv[2] != 'W' && *argv[2] != 'S' &&
+        *argv[2] != 'T')
+      std::cout << "Invalid wave selection. Defaulting to square" << std::endl;
+    else
+      selection = *argv[2];
+  }
   const std::string fileName = argv[1];
   std::signal(SIGINT, handle_signal);
   auto portaudioSession = std::make_shared<PortAudioSession>();
   g_portaudioWeak = portaudioSession;
   NcursesSession ncursesSession;
-  SoundPlayer player;
+  SoundPlayer player(selection);
   NotePlayerAlsa notePlayer;
   NcursesDrawer drawer;
   drawer.init();

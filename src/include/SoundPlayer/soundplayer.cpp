@@ -1,11 +1,52 @@
 #include "soundplayer.h"
 #include <cmath>
+#include <functional>
+#include <iostream>
 #include <stdexcept>
 
-SoundPlayer::SoundPlayer() : stream_(nullptr), data_{0.0, 0.0} {
+std::function<double(double)> SoundPlayer::waveFunc = nullptr;
+
+inline double sineWave(double phase) { return std::sin(2.0 * M_PI * phase); }
+
+inline double sawtoothWave(double phase) {
+  return 2.0 * (phase - static_cast<int>(phase + 0.5));
+}
+
+inline double squareWave(double phase) {
+  return 4.0 * static_cast<int>(phase) - 2.0 * static_cast<int>(2 * phase) +
+         1.0;
+}
+
+inline double triangleWave(double phase) {
+  return 4.0 * std::abs(phase - std::floor(phase + 0.75) + 0.25) - 1.0;
+}
+
+SoundPlayer::SoundPlayer(char type) : stream_(nullptr), data_{0.0, 0.0} {
   PaError err = Pa_Initialize();
   if (err != paNoError) {
     throw std::runtime_error("PortAudio initialization failed");
+  }
+  switch (type) {
+  case 'S':
+    std::cout << "chosen sine" << std::endl;
+    waveFunc = sineWave;
+    break;
+  case 'W':
+    std::cout << "chosen sawtooth" << std::endl;
+    waveFunc = sawtoothWave;
+    break;
+  case 'Q':
+    std::cout << "chosen square" << std::endl;
+    waveFunc = squareWave;
+    break;
+  case 'T':
+    std::cout << "chosen triangle" << std::endl;
+    waveFunc = triangleWave;
+    break;
+  default:
+    std::cout << "chosen sine" << std::endl;
+    waveFunc = sineWave;
+    break;
   }
 }
 
@@ -67,11 +108,7 @@ int SoundPlayer::paCallback(const void * /*inputBuffer*/, void *outputBuffer,
   PaData *data = static_cast<PaData *>(userData);
 
   for (unsigned int i = 0; i < framesPerBuffer; ++i) {
-    // *out++ = std::sinf(2 * M_PI * data->phase); // sine 
-    // *out++ = 2 * (data->phase - (int)(data->phase + 0.5)); // sawtooth
-    *out++ = 4 * (int)(data->phase)-2 * (int)(2 * data->phase) + 1; // square
-    // *out++ = 4*std::abs(data->phase - floor(data->phase + .75)+.25)-1; // triangle
-    // *out++ = (int)(data->phase)-2 * (int)(3 * data->phase) + 1; // guitar thingy?
+    *out++ = waveFunc(data->phase);
     data->phase += data->frequency / SAMPLE_RATE;
     if (data->phase >= 1.0)
       data->phase -= 1.0;

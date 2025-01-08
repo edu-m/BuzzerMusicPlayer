@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cmath>
+#include <cstdlib>
+#include <functional>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -8,7 +11,7 @@
 
 class SoundPlayer {
 public:
-  SoundPlayer();
+  SoundPlayer(char type);
   ~SoundPlayer();
 
   void playTone(double frequency, int duration_ms);
@@ -20,9 +23,10 @@ private:
                         PaStreamCallbackFlags statusFlags, void *userData);
 
   PaStream *stream_;
-
+  static std::function<double(double)> waveFunc;
   struct PaData {
     double phase;
     double frequency;
   } data_;
+
 };
