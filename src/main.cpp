@@ -96,7 +96,7 @@ int main(int argc, char **argv) try {
     } else {
       if (!(input >> octave >> value)) {
         std::cerr
-            << "Malformed note entry: expected <note> <octave> <value>.\n";
+            << "Incorrect note entry: expected <note> <octave> <value>.\n";
         break;
       }
       notePlayer.play(note, octave, value, *speaker, bpm);
